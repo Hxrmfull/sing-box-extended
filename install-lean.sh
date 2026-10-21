@@ -182,7 +182,10 @@ say "current sing-box: ${PREV_VERSION_SHOWN:-none}${PREV_PKGS:+ (package:$PREV_P
 # Keep a copy of the current sing-box in /tmp for an offline rollback: the package file
 # when it comes from the feed, otherwise the binary itself.
 if [ -n "$PREV_PKGS" ]; then
-    apk fetch -o "$BACKUP" $PREV_PKGS </dev/null >/dev/null 2>&1 || say "could not cache the package, rollback will need internet"
+    # The package index is not kept across reboots, so refresh it before fetching.
+    apk update </dev/null >/dev/null 2>&1
+    apk fetch -o "$BACKUP" $PREV_PKGS </dev/null >/dev/null 2>&1 ||
+        say "could not cache the package, keeping a copy of the binary instead"
 fi
 if ! ls "$BACKUP"/*.apk >/dev/null 2>&1 && [ -f "$TARGET" ]; then
     [ "$(tmp_free_kb)" -gt $(( $(file_kb "$TARGET") + 16384 )) ] ||
