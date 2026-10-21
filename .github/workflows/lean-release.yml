@@ -1,0 +1,161 @@
+name: Lean release
+
+# Daily: when shtorm-7/sing-box-extended publishes a new release, rebuild it with the lean
+# overlay from this branch (lean/apply.sh), run the loopback test and publish "<tag>-lean".
+# Upstream history is never merged here, so upstream workflow changes cannot block the push.
+
+on:
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Upstream tag to build (empty: latest upstream release)"
+        required: false
+        default: ""
+      dry_run:
+        description: "Build and test only, publish nothing"
+        type: boolean
+        default: false
+      force:
+        description: "Rebuild even if this tag already has a lean release"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: lean-release
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: shtorm-7/sing-box-extended
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve upstream tag
+        id: up
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          latest=$(gh release view -R "$UPSTREAM" --json tagName -q .tagName)
+          tag=${INPUT_TAG:-$latest}
+          {
+            echo "tag=$tag"
+            echo "lean_tag=$tag-lean"
+            echo "version=${tag#v}"
+            echo "is_latest=$([ "$tag" = "$latest" ] && echo true || echo false)"
+          } >> "$GITHUB_OUTPUT"
+          if gh release view "$tag-lean" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 && [ "$FORCE" != true ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::$tag-lean is already released, nothing to do"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::building $tag-lean (latest upstream: $latest)"
+          fi
+
+      - name: Check out overlay
+        if: steps.up.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          path: overlay
+
+      - name: Check out upstream ${{ steps.up.outputs.tag }}
+        if: steps.up.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UPSTREAM }}
+          ref: ${{ steps.up.outputs.tag }}
+          path: upstream
+          persist-credentials: false
+
+      - name: Set up Go
+        if: steps.up.outputs.skip != 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: upstream/go.mod
+          cache-dependency-path: upstream/go.sum
+
+      - name: Apply overlay and build
+        if: steps.up.outputs.skip != 'true'
+        env:
+          LEAN_BASE_VERSION: ${{ steps.up.outputs.version }}
+        run: |
+          sh overlay/lean/apply.sh upstream
+          cd upstream
+          sh build-lean.sh arm64
+          sh build-lean.sh amd64
+          gzip -9 -n -k dist/sing-box-lean-linux-arm64
+          tar --exclude=./.git --exclude=./dist -czf "dist/sing-box-extended-$LEAN_BASE_VERSION-lean-src.tar.gz" \
+            --transform "s,^\.,sing-box-extended-$LEAN_BASE_VERSION-lean," .
+          ls -l dist
+
+      - name: Loopback test
+        if: steps.up.outputs.skip != 'true'
+        run: bash overlay/lean/e2e/run.sh upstream/dist/sing-box-lean-linux-amd64
+
+      - name: Keep build (dry run)
+        if: steps.up.outputs.skip != 'true' && inputs.dry_run
+        uses: actions/upload-artifact@v4
+        with:
+          name: lean-${{ steps.up.outputs.version }}
+          path: upstream/dist/
+
+      - name: Publish release
+        if: steps.up.outputs.skip != 'true' && !inputs.dry_run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.up.outputs.tag }}
+          LEAN_TAG: ${{ steps.up.outputs.lean_tag }}
+          VERSION: ${{ steps.up.outputs.version }}
+          IS_LATEST: ${{ steps.up.outputs.is_latest }}
+        run: |
+          cd upstream/dist
+          assets="sing-box-lean-linux-arm64 sing-box-lean-linux-arm64.sha256 sing-box-lean-linux-arm64.gz
+            sing-box-lean-linux-amd64 sing-box-lean-linux-amd64.sha256 sing-box-extended-$VERSION-lean-src.tar.gz"
+          cat > notes.md <<EOF
+          Облегчённая сборка sing-box-extended $TAG с XHTTP для Forkop на OpenWrt (aarch64).
+          Собрана автоматически: исходники автора [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG)
+          плюс наложение из ветки \`lean\` (коммит ${GITHUB_SHA::7}). Перед публикацией прошёл тест:
+          трафик через XHTTP+Reality, XHTTP+TLS, gRPC+Reality, TLS, Hysteria2, Reality+Vision.
+
+          Установка или обновление на роутере:
+          \`\`\`sh
+          sh <(wget -O - https://raw.githubusercontent.com/$GITHUB_REPOSITORY/lean/install-lean.sh)
+          \`\`\`
+
+          - \`sing-box-lean-linux-arm64\` (и \`.gz\`): для роутера.
+          - \`sing-box-lean-linux-amd64\`: та же сборка для x86-64.
+          - \`sing-box-extended-$VERSION-lean-src.tar.gz\`: точные исходники этой сборки.
+
+          Подробности: [LEAN.md](https://github.com/$GITHUB_REPOSITORY/blob/lean/LEAN.md).
+          EOF
+          if gh release view "$LEAN_TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$LEAN_TAG" -R "$GITHUB_REPOSITORY" --clobber $assets
+            gh release edit "$LEAN_TAG" -R "$GITHUB_REPOSITORY" --notes-file notes.md
+          else
+            latest_flag=--latest=false
+            [ "$IS_LATEST" = true ] && latest_flag=--latest
+            gh release create "$LEAN_TAG" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "$VERSION+lean" --notes-file notes.md $latest_flag $assets
+          fi
+
+      - name: Update dist mirror
+        if: steps.up.outputs.skip != 'true' && !inputs.dry_run && steps.up.outputs.is_latest == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.up.outputs.version }}
+        run: |
+          mkdir mirror && cd mirror
+          git init -q -b dist
+          cp ../upstream/dist/sing-box-lean-linux-arm64.gz ../upstream/dist/sing-box-lean-linux-arm64.sha256 .
+          cp ../overlay/lean/dist-README.md README.md
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "dist: $VERSION+lean arm64 mirror"
+          git push -q -f "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY.git" dist
