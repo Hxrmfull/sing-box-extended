@@ -61,22 +61,21 @@ jobs:
 
       - name: Check out overlay
         if: steps.up.outputs.skip != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: overlay
 
+      # Plain clone: upstream has a submodule gitlink (clients/desktop) without a .gitmodules
+      # entry, which breaks actions/checkout's submodule cleanup.
       - name: Check out upstream ${{ steps.up.outputs.tag }}
         if: steps.up.outputs.skip != 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.UPSTREAM }}
-          ref: ${{ steps.up.outputs.tag }}
-          path: upstream
-          persist-credentials: false
+        env:
+          TAG: ${{ steps.up.outputs.tag }}
+        run: git clone -q --depth 1 --branch "$TAG" "https://github.com/$UPSTREAM.git" upstream
 
       - name: Set up Go
         if: steps.up.outputs.skip != 'true'
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: upstream/go.mod
           cache-dependency-path: upstream/go.sum
@@ -101,7 +100,7 @@ jobs:
 
       - name: Keep build (dry run)
         if: steps.up.outputs.skip != 'true' && inputs.dry_run
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lean-${{ steps.up.outputs.version }}
           path: upstream/dist/
