@@ -29,6 +29,42 @@ pkg_installed() { apk info -e "$1" >/dev/null 2>&1; }
 file_kb() { [ -f "$1" ] && echo $(( ($(wc -c < "$1") + 1023) / 1024 )) || echo 0; }
 tmp_free_kb() { df -k /tmp | awk 'NR==2 {print $4}'; }
 
+# fetch URL OUT [PROXY]: gives up on a stalled connection after 30s, two tries.
+fetch() {
+    n=0
+    while [ $n -lt 2 ]; do
+        if [ -n "$3" ]; then
+            http_proxy="http://$3" https_proxy="http://$3" wget -q -T 30 -O "$2" "$1" && return 0
+        else
+            wget -q -T 30 -O "$2" "$1" && return 0
+        fi
+        n=$((n + 1))
+    done
+    return 1
+}
+
+# try_source NAME BASE_URL [PROXY]: downloads the binary (gzip when possible) and its
+# checksum from one source; succeeds only if the checksum matches.
+try_source() {
+    say "trying $1"
+    rm -f "$NEW" "$NEW.gz" "$NEW.sha256"
+    fetch "$2/$ASSET.sha256" "$NEW.sha256" "$3" || { say "  not reachable"; return 1; }
+    if [ $HAVE_GUNZIP = 1 ]; then
+        fetch "$2/$ASSET.gz" "$NEW.gz" "$3" && gunzip -c "$NEW.gz" > "$NEW" 2>/dev/null
+        rm -f "$NEW.gz"
+    else
+        fetch "$2/$ASSET" "$NEW" "$3"
+    fi
+    expected=$(awk '{print $1}' "$NEW.sha256")
+    actual=$(sha256sum "$NEW" 2>/dev/null | awk '{print $1}')
+    if [ -n "$expected" ] && [ "$expected" = "$actual" ]; then
+        say "  checksum ok"
+        return 0
+    fi
+    say "  download incomplete or damaged"
+    return 1
+}
+
 write_or_remove() {
     if [ -n "$2" ]; then echo "$2" > "$1"; else rm -f "$1"; fi
 }
@@ -104,14 +140,18 @@ if [ -f /tmp/sing-box ]; then
     say "using /tmp/sing-box copied by hand"
     mv /tmp/sing-box "$NEW"
 else
-    url="https://github.com/$REPO/releases/latest/download"
-    say "downloading $url/$ASSET"
-    wget -q -O "$NEW" "$url/$ASSET" || die "download failed"
-    wget -q -O "$NEW.sha256" "$url/$ASSET.sha256" || die "checksum download failed"
-    expected=$(awk '{print $1}' "$NEW.sha256")
-    actual=$(sha256sum "$NEW" | awk '{print $1}')
-    [ -n "$expected" ] && [ "$expected" = "$actual" ] || die "checksum mismatch, the download is damaged"
-    say "checksum ok"
+    command -v gunzip >/dev/null 2>&1 && HAVE_GUNZIP=1 || HAVE_GUNZIP=0
+    release="https://github.com/$REPO/releases/latest/download"
+    # raw.githubusercontent.com serves this script too, so it is the source most likely to work.
+    # The Forkop proxy ports exist when "download via proxy" is enabled in Forkop settings.
+    try_source "GitHub (raw, dist branch)" "https://raw.githubusercontent.com/$REPO/dist" ||
+        try_source "GitHub releases" "$release" ||
+        try_source "GitHub releases via Forkop proxy :4535" "$release" 127.0.0.1:4535 ||
+        try_source "GitHub releases via Forkop proxy :4534" "$release" 127.0.0.1:4534 ||
+        try_source "jsDelivr CDN" "https://cdn.jsdelivr.net/gh/$REPO@dist" ||
+        die "could not download the lean build from any source, nothing changed.
+  Download $ASSET from https://github.com/$REPO/releases on a PC,
+  copy it to the router as /tmp/sing-box and run this script again"
 fi
 chmod 0755 "$NEW"
 VER=$("$NEW" version 2>/dev/null | head -1 | awk '{print $NF}')
