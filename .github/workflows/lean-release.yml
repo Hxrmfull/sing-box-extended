@@ -94,9 +94,20 @@ jobs:
             --transform "s,^\.,sing-box-extended-$LEAN_BASE_VERSION-lean," .
           ls -l dist
 
-      - name: Loopback test
+      - name: Loopback test (amd64)
         if: steps.up.outputs.skip != 'true'
         run: bash overlay/lean/e2e/run.sh upstream/dist/sing-box-lean-linux-amd64
+
+      - name: Set up QEMU
+        if: steps.up.outputs.skip != 'true'
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+
+      # The router runs the arm64 binary, so test that exact file too (emulated via binfmt).
+      - name: Loopback test (arm64, router binary)
+        if: steps.up.outputs.skip != 'true'
+        run: bash overlay/lean/e2e/run.sh upstream/dist/sing-box-lean-linux-arm64
 
       - name: Keep build (dry run)
         if: steps.up.outputs.skip != 'true' && inputs.dry_run
