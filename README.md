@@ -1,116 +1,66 @@
-# sing-box-extended
+# sing-box-extended lean
 
-[![license](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
-[![go](https://img.shields.io/badge/go-1.26-00ADD8.svg)](go.mod)
-[![codeberg](https://img.shields.io/badge/mirror-codeberg-2185D0.svg)](https://codeberg.org/shtorm-7/sing-box-extended)
-[![telegram](https://img.shields.io/badge/telegram-chat-26A5E4.svg?logo=telegram)](https://t.me/sing_box_extended)
+Облегчённая сборка [sing-box-extended](https://github.com/shtorm-7/sing-box-extended)
+для [Forkop](https://github.com/ushan0v/forkop) на роутерах OpenWrt (aarch64).
+XHTTP работает, а памяти сборка занимает примерно как stable.
 
-Sing-box with extended features.
+| | Extended compressed | **lean** |
+|---|---|---|
+| Бинарник | ~93 МБ, сжат UPX | **~26 МБ, без сжатия** |
+| Свободная память на роутере с 256 МБ ОЗУ (Cudy WR3000S) | ~12 МБ | **~103 МБ** |
 
-## 🔥 Features
+Сжатая UPX сборка при запуске целиком распаковывается в оперативку. Лёгкая сборка
+читается с флеша по мере надобности.
 
-### Protocols
-- **WARP** — Cloudflare WARP integration through WireGuard
-- **MASQUE** — Cloudflare MASQUE proxy over QUIC / HTTP-2
-- **MTProxy** — Telegram MTProxy server with FakeTLS and domain fronting
-- **Mieru** — Secure, hard to classify, hard to probe network protocol
-- **TrustTunnel** — AdGuard's obfuscated VPN protocol, indistinguishable from HTTPS traffic
-- **Sudoku** — Traffic obfuscation protocol based on 4×4 Sudoku puzzles with low-entropy fingerprints
-- **SSH** — SSH client and server with certificate authentication and upstream fallback
-- **Call** — Traffic tunneling through video-call platforms (VK, Dion, Telemost, WBStream)
-- **VPN** — Routed tunnel over any sing-box protocol
-- **Bond** — Link aggregation for increasing throughput
-- **Fallback** — Outbound group with priority-based switching
-- **Failover** — Automatic outbound switching with session recovery for high availability
+## Установка
 
-### DNS
-- **SDNS (DNSCrypt)** — Encrypted DNS queries for enhanced privacy
-- **DNS Fallback** — Sequential / parallel queries across upstream resolvers
+На роутере с Forkop:
 
-### Limiters
-- **Bandwidth Limiter** — Upload / download / bidirectional rate limiting
-- **Connection Limiter** — Concurrent connection control
-- **Traffic Limiter** — Per-user traffic quotas
-- **Rate Limiter** — Request rate limiting
-
-### Encryption & Obfuscation
-- **Amnezia 3.1** — WireGuard traffic obfuscation
-- **VLESS encryption** — XRAY encryption for VLESS protocol
-
-### Transports
-- **mKCP** — Reliable UDP-based transport
-- **XHTTP** — Modern XRAY transport
-- **Rmux** — Improved smux multiplexer
-
-### Services
-- **Admin Panel** — Web-based management interface
-- **Manager** — Management service for configuring users, nodes, limiters
-- **Manager API (HTTP/gRPC)** — HTTP and gRPC API for the Manager
-- **Node Manager API** — Service for connecting nodes to remote manager
-
-### Miscellaneous
-- **Providers** — Outbound subscriptions from local files, inline lists, or remote URLs (sing-box JSON, Clash YAML, SIP008, share links)
-- **Link Parser** — Outbound configured from a share link (VLESS, VMess, Shadowsocks, Trojan, Hysteria, Hysteria2, TUIC, AnyTLS)
-- **Extended WireGuard options** — Advanced configuration capabilities
-- **Unified Delay** — Unified latency measurement
-
-## 📚 Examples
-
-Configuration examples are available here:
-
-https://github.com/shtorm-7/sing-box-extended/tree/extended/examples
-
-## Support the Project
-
-If you want to support the project, you can donate to the following addresses.
-
-#### Tribute
-
-**[RUB Donate](https://web.tribute.tg/d/JxY)**
-
-**[EUR Donate](https://web.tribute.tg/d/JxZ)**
-
-**[USD Donate](https://web.tribute.tg/d/Jy1)**
-
-#### TRX (Tron)
-```
-TSWU6VUZ4FcUghYDmbbhK15gRVvhvBgW3F
-```
-#### TON
-```
-UQAyD2UuT5kCP6lZQlhFL0hyNibDXNE4nIo_RSLVSYAtD7N1
-```
-#### Solana
-```
-CJu8ickwRCwNE71uVFjYf1UveyCkRp9Xo44rhPcQpeFL
-```
-#### Bitcoin
-```
-bc1qqx97p8k4dchqkyd47s4vf74hrqdfnmhqvcja7x
-```
-#### Ethereum
-```
-0xAcc5919C22F2B3fAa0ec7E8BaD142da5B375FBF6
+```sh
+sh <(wget -O - https://raw.githubusercontent.com/Hxrmfull/sing-box-extended/lean/install-lean.sh)
 ```
 
-## License
+Как работает скрипт:
+- проверяет текущий конфиг Forkop новой сборкой;
+- сохраняет копию прежнего sing-box;
+- если новая сборка не запустилась, сам откатывается на прежнюю.
 
-```
-Copyright (C) 2022 by nekohasekai <contact-sagernet@sekai.icu>
+Настройки Forkop скрипт не меняет.
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+- **Обновление:** та же команда.
+- **Откат:** Forkop → Компоненты → Stable.
+- **Кнопкой в Forkop sing-box не обновляйте:** она поставит обратно тяжёлую сборку.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+## Что внутри
 
-You should have received a copy of the GNU General Public License
-along with this program. If not, see <http://www.gnu.org/licenses/>.
+Оставлено только то, что генерирует Forkop:
+- протоколы: VLESS, VMess, Trojan, Shadowsocks, SOCKS, HTTP, Hysteria2;
+- транспорты: XHTTP, WebSocket, gRPC, HTTPUpgrade, HTTP;
+- защита: TLS, Reality, uTLS;
+- tproxy, DNS с FakeIP, группы urltest и selector, clash API.
 
-In addition, no derivative work may use the name or imply association
-with this application without prior consent.
-```
+Убраны WARP/MASQUE, MTProxy, Tailscale, WireGuard, OpenVPN/OpenConnect, Snell, Mieru, Tor,
+SSH, AnyTLS, ShadowTLS, NaïveProxy и менеджер-API. Добавлен мягкий лимит памяти Go 64 МБ.
+
+## Как устроен форк
+
+Исходники автора здесь не хранятся, в ветке лежат только наши изменения:
+
+| Файл | Назначение |
+|---|---|
+| `include/registry_lean.go` | урезанный список протоколов (тег сборки `lean`) |
+| `cmd/sing-box/lean_memlimit.go` | лимит памяти по умолчанию |
+| `lean/apply.sh` | накладывает изменения на чистые исходники sing-box-extended |
+| `build-lean.sh` | сборка |
+| `install-lean.sh` | установщик для роутера |
+| `lean/e2e/` | тест: трафик через XHTTP, Reality, gRPC, TLS, Hysteria2, Vision |
+
+Раз в сутки GitHub Actions проверяет новые релизы автора. Если вышла новая версия, workflow:
+1. накладывает на неё изменения;
+2. собирает версии для arm64 и amd64;
+3. прогоняет тест обоих бинарников (arm64 запускается в QEMU);
+4. публикует релиз `<версия>-lean`.
+
+Полные исходники каждой сборки лежат в релизе, в архиве `-lean-src.tar.gz`.
+
+Лицензия GPL-3.0, как у оригинала.
