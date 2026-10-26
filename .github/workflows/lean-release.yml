@@ -129,21 +129,25 @@ jobs:
           assets="sing-box-lean-linux-arm64 sing-box-lean-linux-arm64.sha256 sing-box-lean-linux-arm64.gz
             sing-box-lean-linux-amd64 sing-box-lean-linux-amd64.sha256 sing-box-extended-$VERSION-lean-src.tar.gz"
           cat > notes.md <<EOF
-          Облегчённая сборка sing-box-extended $TAG с XHTTP для Forkop на OpenWrt (aarch64).
-          Собрана автоматически: исходники автора [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG)
-          плюс наложение из ветки \`lean\` (коммит ${GITHUB_SHA::7}). Перед публикацией прошёл тест:
-          трафик через XHTTP+Reality, XHTTP+TLS, gRPC+Reality, TLS, Hysteria2, Reality+Vision.
+          ## What's new
 
-          Установка или обновление на роутере:
+          - Rebuilt from sing-box-extended [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG).
+
+          ## Downloads
+
+          | File | For |
+          |---|---|
+          | \`sing-box-lean-linux-arm64\` (\`.gz\`) | OpenWrt routers, aarch64 |
+          | \`sing-box-lean-linux-amd64\` | x86-64 |
+          | \`sing-box-extended-$VERSION-lean-src.tar.gz\` | Source code of this build |
+
+          Requires an OpenWrt router with Forkop. Install or update on the router:
+
           \`\`\`sh
           sh <(wget -O - https://raw.githubusercontent.com/$GITHUB_REPOSITORY/lean/install-lean.sh)
           \`\`\`
 
-          - \`sing-box-lean-linux-arm64\` (и \`.gz\`): для роутера.
-          - \`sing-box-lean-linux-amd64\`: та же сборка для x86-64.
-          - \`sing-box-extended-$VERSION-lean-src.tar.gz\`: точные исходники этой сборки.
-
-          Подробности: [README](https://github.com/$GITHUB_REPOSITORY#readme).
+          Лёгкая сборка sing-box-extended $TAG с XHTTP для Forkop.
           EOF
           if gh release view "$LEAN_TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$LEAN_TAG" -R "$GITHUB_REPOSITORY" --clobber $assets
